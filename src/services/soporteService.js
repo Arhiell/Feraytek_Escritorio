@@ -37,6 +37,16 @@ export const soporteService = {
     const res = await fetch(`${LOCAL_BACKEND}/soporte/${id}/prioridad`, { method:'PUT', headers:{ 'Content-Type':'application/json', ...(token?{ Authorization:`Bearer ${token}` }:{}) }, body: JSON.stringify({ prioridad }) })
     const j = await res.json(); if (!res.ok) throw new Error(j?.error || 'Error al cambiar prioridad'); return j
   },
+  async listarTodos(params = {}) {
+    const token = sessionStorage.getItem('token')
+    const qs = new URLSearchParams()
+    if (params.estado) qs.set('estado', String(params.estado))
+    if (params.prioridad) qs.set('prioridad', String(params.prioridad))
+    qs.set('page', String(params.page ?? 1))
+    qs.set('limit', String(params.limit ?? 10))
+    const res = await fetch(`${LOCAL_BACKEND}/soporte?${qs.toString()}`, { headers: token?{ Authorization:`Bearer ${token}` }:{} })
+    const j = await res.json(); if (!res.ok) throw new Error(j?.error || 'Error al listar tickets'); return j
+  },
   async cerrar(id, payload) {
     const token = sessionStorage.getItem('token')
     const res = await fetch(`${LOCAL_BACKEND}/soporte/${id}/cerrar`, { method:'PUT', headers:{ 'Content-Type':'application/json', ...(token?{ Authorization:`Bearer ${token}` }:{}) }, body: JSON.stringify(payload) })

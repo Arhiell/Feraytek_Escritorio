@@ -6,22 +6,30 @@
 const { apiClient } = require("../lib/apiClient")
 const { extractArray } = require("../lib/utils")
 
-const estadosValidos = ["preparando","en_camino","entregado","demorado"]
+const estadosValidos = ["preparando","en_camino","entregado","devuelto"]
 
 module.exports = {
   async listarEnvios(auth) {
     const hdr = auth ? { Authorization: auth } : {}
-    const r = await apiClient.get("/envios", { headers: hdr })
-    const arr = Array.isArray(r.data?.data) ? r.data.data : (Array.isArray(r.data) ? r.data : [])
-    return { ok: true, data: arr }
+    try {
+      const r = await apiClient.get("/envios", { headers: hdr })
+      const arr = Array.isArray(r.data?.data) ? r.data.data : (Array.isArray(r.data) ? r.data : [])
+      return { ok: true, data: arr }
+    } catch (e) {
+      return { ok: false, message: e?.message || "Servicio de envíos no disponible" }
+    }
   },
   async obtenerEnvio(auth, id) {
     const nid = Number(id)
     if (!Number.isFinite(nid) || nid <= 0) return { ok: false, message: "ID inválido" }
     const hdr = auth ? { Authorization: auth } : {}
-    const r = await apiClient.get(`/envios/${nid}`, { headers: hdr }).catch(() => null)
-    const obj = r && (r.data?.data ?? r.data)
-    return obj ? { ok: true, data: obj } : { ok: false, message: "Envío no encontrado" }
+    try {
+      const r = await apiClient.get(`/envios/${nid}`, { headers: hdr })
+      const obj = r.data?.data ?? r.data
+      return obj ? { ok: true, data: obj } : { ok: false, message: "Envío no encontrado" }
+    } catch (e) {
+      return { ok: false, message: e?.message || "Envío no encontrado" }
+    }
   },
   async crearEnvio(auth, datos) {
     const pid = Number(datos?.id_pedido)
@@ -42,8 +50,12 @@ module.exports = {
       return { ok: false, message: "Datos de dirección incompletos" }
     }
     const hdr = auth ? { Authorization: auth } : {}
-    const r = await apiClient.post("/envios", payload, { headers: hdr })
-    return { ok: true, message: "Envío creado", data: r.data?.data ?? r.data }
+    try {
+      const r = await apiClient.post("/envios", payload, { headers: hdr })
+      return { ok: true, message: "Envío creado", data: r.data?.data ?? r.data }
+    } catch (e) {
+      return { ok: false, message: e?.message || "No se pudo crear el envío" }
+    }
   },
   async actualizarDatosEnvio(auth, id_envio, datos) {
     const nid = Number(id_envio)
@@ -59,8 +71,12 @@ module.exports = {
       numero_seguimiento: String(datos?.numero_seguimiento || "").trim() || null,
     }
     const hdr = auth ? { Authorization: auth } : {}
-    const r = await apiClient.put(`/envios/${nid}`, payload, { headers: hdr }).catch(() => null)
-    return r ? { ok: true, message: "Datos actualizados", data: r.data?.data ?? r.data } : { ok: false, message: "Envío no encontrado o sin cambios" }
+    try {
+      const r = await apiClient.put(`/envios/${nid}`, payload, { headers: hdr })
+      return { ok: true, message: "Datos actualizados", data: r.data?.data ?? r.data }
+    } catch (e) {
+      return { ok: false, message: e?.message || "Envío no encontrado o sin cambios" }
+    }
   },
   async cambiarEstadoEnvio(auth, id_envio, estado_envio) {
     const nid = Number(id_envio)
@@ -68,44 +84,56 @@ module.exports = {
     if (!Number.isFinite(nid) || nid <= 0) return { ok: false, message: "ID inválido" }
     if (!estadosValidos.includes(estado)) return { ok: false, message: "Estado inválido" }
     const hdr = auth ? { Authorization: auth } : {}
-    const r = await apiClient.put(`/envios/${nid}/estado`, { estado_envio: estado }, { headers: hdr }).catch(() => null)
-    return r ? { ok: true, message: "Estado actualizado", data: r.data?.data ?? r.data } : { ok: false, message: "No se pudo actualizar" }
+    try {
+      const r = await apiClient.put(`/envios/${nid}/estado`, { estado_envio: estado }, { headers: hdr })
+      return { ok: true, message: "Estado actualizado", data: r.data?.data ?? r.data }
+    } catch (e) {
+      return { ok: false, message: e?.message || "No se pudo actualizar" }
+    }
   },
   async eliminarEnvio(auth, id_envio) {
     const nid = Number(id_envio)
     if (!Number.isFinite(nid) || nid <= 0) return { ok: false, message: "ID inválido" }
     const hdr = auth ? { Authorization: auth } : {}
-    const r = await apiClient.delete(`/envios/${nid}`, { headers: hdr }).catch(() => null)
-    return r ? { ok: true, message: "Envío eliminado", data: r.data?.data ?? r.data } : { ok: false, message: "Envío no encontrado" }
+    try {
+      const r = await apiClient.delete(`/envios/${nid}`, { headers: hdr })
+      return { ok: true, message: "Envío eliminado", data: r.data?.data ?? r.data }
+    } catch (e) {
+      return { ok: false, message: e?.message || "Envío no encontrado" }
+    }
   },
   async crearEnviosParaPedidosExistentes(auth) {
     const hdr = auth ? { Authorization: auth } : {}
-    const pr = await apiClient.get("/pedidos", { headers: hdr }).catch(() => null)
-    const er = await apiClient.get("/envios", { headers: hdr }).catch(() => null)
-    const pedidos = extractArray(pr?.data)
-    const envios = extractArray(er?.data)
-    const conEnvio = new Set(envios.map(e => String(e.id_pedido ?? e.pedido_id)))
-    let count = 0
-    for (const p of pedidos) {
-      const pid = p.id_pedido ?? p.id ?? p.pedido_id
-      if (!pid || conEnvio.has(String(pid))) continue
-      const payload = {
-        id_pedido: Number(pid),
-        destinatario: (p.cliente && p.cliente.nombre) ? p.cliente.nombre : (p.cliente_nombre || null),
-        direccion_envio: p.direccion ?? p.direccion_envio ?? p.address ?? "",
-        ciudad: p.ciudad ?? "",
-        provincia: p.provincia ?? "",
-        pais: "Argentina",
-        codigo_postal: p.codigo_postal ?? p.postal_code ?? "",
-        empresa_envio: null,
-        numero_seguimiento: null,
-        estado_envio: "preparando",
+    try {
+      const pr = await apiClient.get("/pedidos", { headers: hdr })
+      const er = await apiClient.get("/envios", { headers: hdr })
+      const pedidos = extractArray(pr?.data)
+      const envios = extractArray(er?.data)
+      const conEnvio = new Set(envios.map(e => String(e.id_pedido ?? e.pedido_id)))
+      let count = 0
+      for (const p of pedidos) {
+        const pid = p.id_pedido ?? p.id ?? p.pedido_id
+        if (!pid || conEnvio.has(String(pid))) continue
+        const payload = {
+          id_pedido: Number(pid),
+          destinatario: (p.cliente && p.cliente.nombre) ? p.cliente.nombre : (p.cliente_nombre || null),
+          direccion_envio: p.direccion ?? p.direccion_envio ?? p.address ?? "",
+          ciudad: p.ciudad ?? "",
+          provincia: p.provincia ?? "",
+          pais: "Argentina",
+          codigo_postal: p.codigo_postal ?? p.postal_code ?? "",
+          empresa_envio: null,
+          numero_seguimiento: null,
+          estado_envio: "preparando",
+        }
+        if (!payload.direccion_envio || !payload.ciudad || !payload.provincia || !payload.codigo_postal) continue
+        await apiClient.post("/envios", payload, { headers: hdr }).catch(() => null)
+        count++
       }
-      if (!payload.direccion_envio || !payload.ciudad || !payload.provincia || !payload.codigo_postal) continue
-      await apiClient.post("/envios", payload, { headers: hdr }).catch(() => null)
-      count++
+      return count > 0 ? { ok: true, message: "Envios generados", data: { generados: count } } : { ok: false, message: "Sin envíos generados" }
+    } catch (e) {
+      return { ok: false, message: e?.message || "No se pudo generar envíos" }
     }
-    return count > 0 ? { ok: true, message: "Envios generados", data: { generados: count } } : { ok: false, message: "Sin envíos generados" }
   },
 }
 

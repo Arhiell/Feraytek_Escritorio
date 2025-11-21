@@ -88,7 +88,7 @@ async function crearEnviosParaPedidosExistentes(req, res) {
   try {
     const auth = req.headers.authorization
     const resultado = await EnvioService.crearEnviosParaPedidosExistentes(auth)
-    if (!resultado.ok) return res.status(500).json(resultado)
+    // Devuelve 200 incluso si no se generaron envíos, para evitar errores 500 en UI
     res.status(200).json(resultado)
   } catch (error) {
     res.status(500).json({ ok: false, message: "Error interno del servidor." })

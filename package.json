@@ -11,7 +11,8 @@
     "eject": "react-scripts eject",
     "electron": "electron .",
     "backend": "node escritorio/backend/server.js",
-    "electron-dev": "concurrently \"set BROWSER=none&& set PORT=3001&& npm start\" \"wait-on http://localhost:3001 && set ELECTRON_START_URL=http://localhost:3001&& electron .\" \"set PORT=4001&& npm run backend\"",
+    "electron-dev": "concurrently \"set PORT=4001&& npm run backend\" \"set BROWSER=none&& set PORT=3001&& npm start\" \"wait-on http://localhost:4001/health http://localhost:3001 && set ELECTRON_START_URL=http://localhost:3001&& npx electron .\"",
+    "electron-prod": "npm run build && npx electron .",
     "electron-pack": "npm run build && electron-builder",
     "dist": "electron-builder",
     "dist-win": "electron-builder --win",
@@ -21,14 +22,16 @@
   },
   "dependencies": {
     "axios": "^1.13.2",
+    "cors": "^2.8.5",
+    "express": "^4.19.2",
+    "jspdf": "^3.0.4",
+    "jspdf-autotable": "^5.0.2",
     "lucide-react": "^0.263.1",
+    "multer": "^1.4.5-lts.1",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-router-dom": "^6.30.2",
-    "sonner": "^0.4.0",
-    "express": "^4.19.2",
-    "multer": "^1.4.5-lts.1",
-    "cors": "^2.8.5"
+    "sonner": "^0.4.0"
   },
   "devDependencies": {
     "concurrently": "^7.6.0",

@@ -19,7 +19,7 @@ class SoporteModel {
     const prioridad = String(payload.prioridad || 'media').trim().toLowerCase()
     if (!asunto) throw new Error('Asunto es requerido')
     if (!descripcion) throw new Error('Descripción es requerida')
-    if (!['baja','media','alta','urgente'].includes(prioridad)) throw new Error('Prioridad inválida')
+    if (!['baja','media','alta'].includes(prioridad)) throw new Error('Prioridad inválida')
     return { asunto, descripcion, prioridad }
   }
 
@@ -45,7 +45,7 @@ class SoporteModel {
   // -------------------------------------------------------------------
   static validatePrioridad(payload = {}) {
     const prioridad = String(payload.prioridad || '').trim().toLowerCase()
-    if (!['baja','media','alta','urgente'].includes(prioridad)) throw new Error('Prioridad inválida')
+    if (!['baja','media','alta'].includes(prioridad)) throw new Error('Prioridad inválida')
     return { prioridad }
   }
 

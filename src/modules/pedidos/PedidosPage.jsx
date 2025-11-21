@@ -1,18 +1,22 @@
 import React, { useState, useEffect } from 'react'
 import { pedidosService } from '../../services/pedidosService'
+import { pagosService } from '../../services/pagosService'
 import PedidoDetailPanel from './PedidoDetailPanel'
-import { Eye } from 'lucide-react'
+import { Eye, ClipboardList, ChevronsLeft, ChevronLeft, ChevronRight } from 'lucide-react'
 
 export default function PedidosPage() {
   const [items, setItems] = useState([])
   const [page, setPage] = useState(1)
-  const [perPage, setPerPage] = useState(25)
+  const [perPage, setPerPage] = useState(10)
   const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [filters, setFilters] = useState({ estado:'', metodo_pago:'', fecha_desde:'', fecha_hasta:'', id:'', id_usuario:'' })
   const [detail, setDetail] = useState(null)
   const [mineOnly, setMineOnly] = useState(false)
+  const [userMap, setUserMap] = useState({})
+  const [payMap, setPayMap] = useState({})
+  const API_BASE = process.env.REACT_APP_API_URL || 'http://localhost:3000/api'
 
   const load = async () => {
     setError('')
@@ -22,6 +26,7 @@ export default function PedidosPage() {
       const arr = Array.isArray(j?.data) ? j.data : (Array.isArray(j) ? j : [])
       setItems(arr)
       setTotal(Number(j?.total ?? arr.length))
+      await enrich(arr)
     } catch (e) { setError(e?.message || 'Error al cargar pedidos') } finally { setLoading(false) }
   }
   useEffect(() => { load() }, [page, perPage, filters.estado, filters.metodo_pago, filters.fecha_desde, filters.fecha_hasta, mineOnly])
@@ -29,10 +34,37 @@ export default function PedidosPage() {
   const pages = Math.max(1, Math.ceil(total / perPage))
   const changePage = (p) => setPage(Math.min(pages, Math.max(1, p)))
   const handlePositiveId = (val) => { const clean = val.replace(/[^0-9]/g, ''); setFilters(f => ({ ...f, id: clean })) }
+  const enrich = async (arr) => {
+    const token = sessionStorage.getItem('token')
+    const uids = Array.from(new Set((arr||[]).map(p => Number(p.id_usuario)).filter(id => Number.isFinite(id) && id>0 && !(id in userMap))))
+    const newUserMap = { ...userMap }
+    await Promise.all(uids.map(async (id) => {
+      try {
+        const hdr = token ? { Authorization: `Bearer ${token}`, Accept: 'application/json' } : { Accept: 'application/json' }
+        const r = await fetch(`${API_BASE}/users/profile/${id}`, { headers: hdr })
+        const j = await r.json().catch(()=>({}))
+        const perfil = j?.data ?? j ?? {}
+        const nombre = perfil.nombre_usuario || (perfil.nombre || perfil.apellido ? `${perfil.nombre||''} ${perfil.apellido||''}`.trim() : '')
+        newUserMap[id] = nombre || perfil.email || `Usuario ${id}`
+      } catch { newUserMap[id] = `Usuario ${id}` }
+    }))
+    setUserMap(newUserMap)
+    const ids = Array.from(new Set((arr||[]).map(p => (p.id ?? p.id_pedido)).filter(x => x != null && !(String(x) in payMap))))
+    try {
+      const res = await pagosService.adminList({ page:1, limit:500 })
+      const data = Array.isArray(res?.data) ? res.data : (Array.isArray(res) ? res : [])
+      const map = { ...payMap }
+      for (const id of ids) {
+        const m = data.find(pp => String(pp.id_pedido ?? pp.pedido_id) === String(id))
+        map[String(id)] = m?.metodo_pago ?? m?.metodo ?? ''
+      }
+      setPayMap(map)
+    } catch {}
+  }
 
   return (
     <div className="productos-module">
-      <h1 style={{color:'#FF7A00'}}>Pedidos</h1>
+      <h1 style={{display:'flex', alignItems:'center', gap:8, color:'#3b82f6'}}><ClipboardList size={22}/> Pedidos</h1>
       <div className="card" style={{marginTop:12}}>
         <div className="productos-filters" style={{display:'flex', gap:12, alignItems:'center', flexWrap:'wrap'}}>
           <label style={{display:'inline-flex', alignItems:'center', gap:8}}>
@@ -69,11 +101,6 @@ export default function PedidosPage() {
           <input type="date" value={filters.fecha_hasta} onChange={(e)=> setFilters(f => ({ ...f, fecha_hasta: e.target.value }))} />
           <input inputMode="numeric" placeholder="ID pedido" value={filters.id} onChange={(e)=> handlePositiveId(e.target.value)} style={{width:120}} disabled={mineOnly} />
           <input inputMode="numeric" placeholder="ID usuario" value={filters.id_usuario} onChange={(e)=> setFilters(f => ({ ...f, id_usuario: e.target.value.replace(/[^0-9]/g,'') }))} style={{width:120}} disabled={mineOnly} />
-          <select value={perPage} onChange={(e)=> { setPerPage(Number(e.target.value)); setPage(1) }}>
-            <option value={20}>20</option>
-            <option value={25}>25</option>
-            <option value={30}>30</option>
-          </select>
           <button className="btn" onClick={()=> { setPage(1); load() }} style={{background:'#1f2937', color:'#fff'}}>Aplicar</button>
         </div>
       </div>
@@ -99,11 +126,20 @@ export default function PedidosPage() {
                 <tr><td colSpan="8" style={{textAlign:'center', padding:20}}>No se encontraron pedidos con los filtros seleccionados</td></tr>
               ) : items.map(p => {
                 const id = p.id ?? p.id_pedido
-                const cliente = p.cliente?.nombre || p.cliente_nombre || `${p.cliente?.nombre || ''} ${p.cliente?.apellido || ''}`.trim() || '-'
+                const cliente = (
+                  p.cliente?.nombre ||
+                  p.cliente_nombre ||
+                  p.nombre_cliente ||
+                  p.usuario ||
+                  p.nombre_usuario ||
+                  (p.user?.nombre_usuario) ||
+                  `${(p.cliente?.nombre || p.user?.nombre || '')} ${(p.cliente?.apellido || p.user?.apellido || '')}`.trim() ||
+                  (p.email ? p.email : (p.id_usuario ? (userMap[p.id_usuario] || `Usuario ${p.id_usuario}`) : '-'))
+                )
                 const creado = new Date(p.created_at ?? p.fecha_creacion ?? p.fecha_pedido ?? Date.now()).toLocaleString()
                 const estado = p.estado ?? '-'
                 const total = Number(p.total_final ?? p.total ?? 0).toFixed(2)
-                const metodo = p.metodo_pago ?? p.payment_method ?? '-'
+                const metodo = p.metodo_pago ?? p.payment_method ?? p.metodo ?? p.pago?.metodo ?? p.pago?.tipo ?? payMap[String(id)] ?? '-'
                 const count = Array.isArray(p.items) ? p.items.length : (Number(p.cantidad_items ?? p.items_count ?? 0))
                 return (
                   <tr key={id ?? creado}>
@@ -117,7 +153,16 @@ export default function PedidosPage() {
                     <td>
                       <div className="actions">
                         <button className="btn btn-view" onClick={async()=>{
-                          try { const d = await pedidosService.obtener(id); setDetail(d) } catch {}
+                          try {
+                            const d = await pedidosService.obtener(id)
+                            const listItems = Array.isArray(p.items) ? p.items : []
+                            const root = d?.data ?? d
+                            if (!Array.isArray(root?.detalle) && listItems.length>0) {
+                              setDetail({ ...root, detalle: listItems })
+                            } else {
+                              setDetail(root)
+                            }
+                          } catch {}
                         }}><Eye size={14}/> Ver detalle</button>
                       </div>
                     </td>
@@ -129,12 +174,14 @@ export default function PedidosPage() {
         </div>
       )}
 
-      <div style={{display:'flex', gap:8, alignItems:'center', marginTop:12}}>
-        <button className="btn" onClick={()=> changePage(1)} disabled={page===1} style={{background:'#1f2937', color:'#fff'}}>Inicio</button>
-        <button className="btn" onClick={()=> changePage(page-1)} disabled={page===1} style={{background:'#1f2937', color:'#fff'}}>Anterior</button>
-        <span style={{color:'#FF7A00'}}>Página {page} de {pages}</span>
-        <button className="btn" onClick={()=> changePage(page+1)} disabled={page>=pages} style={{background:'#1f2937', color:'#fff'}}>Siguiente</button>
-        <button className="btn" onClick={()=> changePage(pages)} disabled={page>=pages} style={{background:'#1f2937', color:'#fff'}}>Final</button>
+      <div style={{display:'flex', alignItems:'center', justifyContent:'flex-start', gap:12, marginTop:12}}>
+        <div style={{color:'#374151'}}>Total: {total}</div>
+        <div style={{display:'flex', alignItems:'center', gap:8}}>
+          <button className="btn" onClick={()=> changePage(1)} disabled={page===1} style={{background:'#2563eb', color:'#fff'}}><ChevronsLeft size={16}/></button>
+          <button className="btn" onClick={()=> changePage(page-1)} disabled={page===1} style={{background:'#2563eb', color:'#fff'}}><ChevronLeft size={16}/></button>
+          <span style={{minWidth:80, textAlign:'center'}}>Página {page} de {pages}</span>
+          <button className="btn" onClick={()=> changePage(page+1)} disabled={page>=pages} style={{background:'#2563eb', color:'#fff'}}><ChevronRight size={16}/></button>
+        </div>
       </div>
 
       {detail && (

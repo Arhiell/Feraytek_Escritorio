@@ -1,4 +1,4 @@
-                                                    Feraytek-API 
+             Feraytek-API 
 
 Funcionalidades Públicas (sin autenticación) 
 
@@ -195,6 +195,10 @@ Metodo GET: http://localhost:3000/api/facturas/admin/buscar?id_usuario=18&email_
  
 
 Funcionalidades de Administradores/SuperAdmin 
+## Cómo usar
+- Activos: GET /api/productos?estado=activo
+- Inactivos: GET /api/productos?estado=inactivo
+- Todos: GET /api/productos?estado=todos![alt text](image.png)
 
 Metodo GET:  http://localhost:3000/api/users, Content-Type / application/Json, authorization bearer el_token (lista los  usuarios) 
 

@@ -29,5 +29,23 @@ export const categoriasService = {
   obtener: async (id) => {
     const { data } = await client.get(`/categorias/${id}`)
     return data?.data ?? data
+  },
+  // Crear categoría (admin)
+  crear: async (payload) => {
+    const body = {
+      nombre_categoria: payload.nombre_categoria ?? payload.nombre,
+      descripcion: payload.descripcion ?? '',
+      estado: payload.estado ?? 'activa'
+    }
+    const { data } = await client.post('/categorias', body)
+    return data?.data ?? data
+  },
+  actualizar: async (id, payload) => {
+    const body = {}
+    if (payload?.nombre_categoria != null || payload?.nombre != null) body.nombre_categoria = payload.nombre_categoria ?? payload.nombre
+    if (payload?.descripcion != null) body.descripcion = payload.descripcion
+    if (payload?.estado != null) body.estado = payload.estado
+    const { data } = await client.put(`/categorias/${id}`, body)
+    return data?.data ?? data
   }
 }

@@ -25,10 +25,10 @@
   --color-text: #E5E7EB;
   /* Color de texto de placeholder: gris claro para indicar campos vacíos */
   --color-muted: #C9D1D9;
-  /* Naranja principal de marca: usado en acentos y acciones primarias */
-  --color-orange: #FF7A00;
-  /* Naranja claro accesorio: usado en estados suaves y detalles */
-  --color-orange-soft: #FFB266;
+  /* Acento azul del panel: usado en acentos y acciones primarias */
+  --color-orange: #3b82f6;
+  /* Acento azul claro: usado en estados suaves y detalles */
+  --color-orange-soft: #93c5fd;
   /* Gris oscuro de paleta: usado en fondos e indicadores neutros */
   --color-gray-dark: #1E1E1E;
   /* Sombra profesional estilo material (shadow-md) para profundidad sutil */
@@ -149,8 +149,8 @@
   overflow: hidden; /* mantiene radios en contenido interno */
 }
 .productos-module .table .actions { display: flex; gap: var(--spacing-2); flex-wrap: wrap; } /* grupo de acciones adaptativo */
-.productos-module .dropzone { border: 2px dashed var(--color-orange); border-radius: var(--radius); padding: var(--spacing-4); background: rgba(255,122,0,0.06); color: var(--color-text); text-align: center; cursor: pointer; }
-.productos-module .dropzone.dragging { background: rgba(255,122,0,0.12); }
+.productos-module .dropzone { border: 2px dashed var(--color-orange); border-radius: var(--radius); padding: var(--spacing-4); background: rgba(59,130,246,0.06); color: var(--color-text); text-align: center; cursor: pointer; }
+.productos-module .dropzone.dragging { background: rgba(59,130,246,0.12); }
 .productos-module .table table {
   width: 100%; /* aprovecha todo el ancho disponible */
   border-collapse: separate; /* permite bordes suaves entre filas */
@@ -206,11 +206,11 @@
 */
 .productos-module .btn-orange {
   background: var(--color-orange);
-  color: #FFFFFF; /* contraste alto sobre fondo naranja */
-  box-shadow: 0 10px 20px rgba(255, 122, 0, 0.15);
+  color: #FFFFFF; /* contraste alto sobre fondo */
+  box-shadow: 0 10px 20px rgba(59, 130, 246, 0.25);
 }
 .productos-module .btn-orange:hover {
-  background: #e86f00; /* tono ligeramente más oscuro en hover */
+  background: #2563eb; /* azul más intenso en hover */
 }
 
 /*
@@ -321,7 +321,7 @@
 }
 .productos-module .btn-view { background: #1f2937; color: #E5E7EB; border: 1px solid #263245; } /* botón ver, neutro oscuro */
 .productos-module .btn-view:hover { background: #253042; }
-.productos-module .btn-edit { background: var(--color-orange-soft); color: #0F1624; border: 1px solid #E39A49; } /* botón editar, accesorio naranja claro */
-.productos-module .btn-edit:hover { background: #FFA54D; }
+.productos-module .btn-edit { background: #1f2937; color: #E5E7EB; border: 1px solid #263245; }
+.productos-module .btn-edit:hover { border-color: var(--color-orange); }
 .productos-module .btn-delete { background: #7f1d1d; color: #FFFFFF; border: 1px solid #ef4444; } /* botón eliminar, alerta accesible */
 .productos-module .btn-delete:hover { background: #8f2222; }

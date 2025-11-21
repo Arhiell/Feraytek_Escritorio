@@ -50,7 +50,11 @@ export const pedidosService = {
   },
   actualizarEstado: async (id, estado) => {
     const token = sessionStorage.getItem('token')
-    const res = await fetch(`${LOCAL_BACKEND}/pedidos/${id}/estado`, { method: 'PUT', headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) }, body: JSON.stringify({ estado }) })
+    const normalized = (() => { const s = String(estado).toLowerCase(); return s === 'devuelto' ? 'cancelado' : s })()
+    const map = { pendiente: 1, procesando: 2, enviado: 3, entregado: 4, cancelado: 5 }
+    const estado_id = map[normalized] ?? null
+    const body = estado_id ? { estado: estado_id } : { estado: normalized }
+    const res = await fetch(`${LOCAL_BACKEND}/pedidos/${id}/estado`, { method: 'PUT', headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) }, body: JSON.stringify(body) })
     const j = await res.json()
     if (!res.ok) throw new Error(j?.error || 'Error al actualizar estado')
     return j?.data ?? j

@@ -35,14 +35,14 @@ export default function ProductosTable({ items, sort, toggleSort, getPrecio, get
                 <td>{p.categoria?.nombre_categoria ?? p.categoria?.nombre ?? p.id_categoria ?? '-'}</td>
                 <td>
                   {isCritico(p) && <span className="badge" style={{background:'#7f1d1d', color:'#fecaca', border:'1px solid #ef4444'}}><AlertTriangle size={12}/> crítico</span>}
-                  <span className="badge" style={{background:'#1E1E1E', color:'#FF7A00', border:'1px solid #FF7A00', marginLeft:6}}><Layers size={12}/> {vcount>0?'con variantes':'sin variantes'}</span>
-                  <span className="badge" style={{background:'#1E1E1E', color:'#FF7A00', border:'1px solid #FF7A00', marginLeft:6}}><ImageIcon size={12}/> {icount>0?'con imágenes':'sin imágenes'}</span>
+                  <span className="badge badge-neutral" style={{marginLeft:6}}><Layers size={12}/> {vcount>0?'con variantes':'sin variantes'}</span>
+                  <span className="badge badge-neutral" style={{marginLeft:6}}><ImageIcon size={12}/> {icount>0?'con imágenes':'sin imágenes'}</span>
                 </td>
                 <td>
                   <div className="actions">
-                    <button className="btn btn-view" onClick={() => openDetail(p)}><Eye size={14}/> Ver</button>
-                    <button className="btn btn-edit" onClick={() => startEdit(p)}><Pencil size={14}/> Editar</button>
-                    <button className="btn btn-delete" onClick={() => handleDelete(p)}><Trash size={14}/> Eliminar</button>
+                    <button className="icon-btn btn-view" title="Ver" onClick={() => openDetail(p)}><Eye size={16}/></button>
+                    <button className="icon-btn btn-edit" title="Editar" onClick={() => startEdit(p)}><Pencil size={16}/></button>
+                    <button className="icon-btn btn-delete" title="Eliminar" onClick={() => handleDelete(p)}><Trash size={16}/></button>
                   </div>
                 </td>
               </tr>
