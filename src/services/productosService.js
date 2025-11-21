@@ -20,10 +20,31 @@ client.interceptors.request.use((config) => {
 
 export const productosService = {
   // Lista productos
+  // Acepta filtros opcionales: { estado, categoria, precio_min, precio_max, stock_max }
   // Normaliza `data.data`, `data.result` o arreglo plano para robustez.
-  listar: async () => {
-    const { data } = await client.get('/productos')
-    return Array.isArray(data?.data) ? data.data : (Array.isArray(data) ? data : (Array.isArray(data?.result) ? data.result : []))
+  listar: async (params = {}) => {
+    const normalize = (data) => (Array.isArray(data?.data) ? data.data : (Array.isArray(data) ? data : (Array.isArray(data?.result) ? data.result : [])))
+    const qs = {}
+    if (params.estado) qs.estado = params.estado
+    if (params.categoria) qs.id_categoria = params.categoria
+    if (params.precio_min != null) qs.precio_min = params.precio_min
+    if (params.precio_max != null) qs.precio_max = params.precio_max
+    if (params.stock_max != null) qs.stock_max = params.stock_max
+    let arr = []
+    try {
+      const { data } = await client.get('/productos', { params: qs })
+      arr = normalize(data)
+    } catch {
+      const { data } = await client.get('/productos')
+      arr = normalize(data)
+    }
+    // Si se pidió inactivos y la API no responde, intenta variantes comunes
+    if (params.estado && String(params.estado).toLowerCase() === 'inactivo' && (!Array.isArray(arr) || arr.length === 0)) {
+      try { const { data } = await client.get('/productos', { params: { estado: 'inactivo' } }); arr = normalize(data) } catch {}
+      try { const { data } = await client.get('/productos', { params: { include_inactivos: true } }); arr = normalize(data) } catch {}
+      try { const { data } = await client.get('/productos', { params: { inactivos: true } }); arr = normalize(data) } catch {}
+    }
+    return arr
   },
   // Obtiene un producto por ID
   // Retorna el objeto contenido en `data.data` o `data`.

@@ -19,7 +19,7 @@ export default function ProductoDetailPanel({ producto, onClose, onChanged }) {
     try {
       const [c, vars, imgsDirect] = await Promise.all([
         (producto.id_categoria || producto.categoria_id || producto.categoria?.id) ? categoriasService.obtener(producto.id_categoria ?? producto.categoria_id ?? producto.categoria?.id).catch(()=>null) : Promise.resolve(null),
-        variantesService.listar().then(arr => arr.filter(v => (v.id_producto ?? v.producto_id) === id)).catch(() => []),
+        variantesService.listarPorProducto(id).catch(() => []),
         imagenesService.listarPorProducto(id).catch(() => [])
       ])
       setCat(c); setVariantes(vars); setImagenes(imgsDirect)

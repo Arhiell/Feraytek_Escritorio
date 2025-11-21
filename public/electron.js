@@ -2,6 +2,7 @@ const { app, BrowserWindow, Menu, ipcMain } = require('electron');
 const path = require('path');
 
 let mainWindow;
+let devCandidates = [];
 
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -17,10 +18,30 @@ function createWindow() {
     show: false
   });
 
-  const startUrl = process.env.ELECTRON_START_URL || (process.env.NODE_ENV === 'development'
-    ? 'http://localhost:3000'
-    : `file://${path.join(__dirname, '../build/index.html')}`);
-  mainWindow.loadURL(startUrl);
+  const fileUrl = `file://${path.join(__dirname, '../build/index.html')}`;
+  const envUrl = process.env.ELECTRON_START_URL;
+  if (envUrl) {
+    devCandidates = [envUrl, 'http://localhost:3001', 'http://localhost:3000', 'http://localhost:3002'];
+  } else if (process.env.NODE_ENV === 'development') {
+    devCandidates = ['http://localhost:3001', 'http://localhost:3000', 'http://localhost:3002'];
+  } else {
+    devCandidates = [];
+  }
+
+  const tryLoad = async (candidates) => {
+    if (!candidates || candidates.length === 0) {
+      mainWindow.loadURL(fileUrl);
+      return;
+    }
+    const url = candidates[0];
+    try {
+      await mainWindow.loadURL(url);
+    } catch (e) {
+      setTimeout(() => tryLoad(candidates.slice(1)), 500);
+    }
+  };
+
+  tryLoad(devCandidates);
 
   mainWindow.once('ready-to-show', () => {
     mainWindow.show();
@@ -60,6 +81,14 @@ function createWindow() {
 
   const menu = Menu.buildFromTemplate(template);
   Menu.setApplicationMenu(menu);
+
+  mainWindow.webContents.on('did-fail-load', () => {
+    if (devCandidates && devCandidates.length > 1) {
+      const next = devCandidates.slice(1);
+      devCandidates = next;
+      tryLoad(next);
+    }
+  });
 }
 
 app.whenReady().then(createWindow);

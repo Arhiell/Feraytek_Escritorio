@@ -2,6 +2,8 @@
 const express = require('express')
 const router = express.Router()
 const { apiClient } = require('../lib/apiClient')
+const axios = require('axios')
+const altClient = axios.create({ baseURL: (process.env.API_BASE_ALT || 'http://localhost:3001/api') })
 
 router.post('/variantes', async (req, res) => {
   try {
@@ -16,11 +18,23 @@ router.post('/variantes', async (req, res) => {
     if (!nombre_variante || !valor_variante) return res.status(400).json({ error: 'nombre_variante y valor_variante requeridos' })
     const auth = req.headers.authorization
     const hdr = auth ? { Authorization: auth } : {}
-    const prod = await apiClient.get(`/productos/${idsane}`, { headers: hdr }).catch(() => null)
-    if (!prod || !(prod.data?.data || prod.data)) return res.status(400).json({ error: 'Debes guardar el producto antes de agregar variantes' })
-    const payload = { id_producto: idsane, nombre_variante, valor_variante, precio_adicional: Number(precio_adicional), stock: Number(stock) }
-    const r = await apiClient.post('/variantes', payload, { headers: hdr })
-    return res.json(r.data)
+    // Intento 1: API con esquema variantes_productos
+    const payloadA = { id_producto: idsane, atributo: nombre_variante, valor: valor_variante, precio: Number(precio_adicional), stock: Number(stock) }
+    try {
+      const r = await apiClient.post('/variantes_productos', payloadA, { headers: hdr })
+      return res.json(r.data)
+    } catch (e1) {
+      // Intento 2: API con esquema variantes
+      const payloadB = { id_producto: idsane, nombre_variante, valor_variante, precio_adicional: Number(precio_adicional), stock: Number(stock) }
+      try {
+        const r2 = await apiClient.post('/variantes', payloadB, { headers: hdr })
+        return res.json(r2.data)
+      } catch (e2) {
+        const r3 = await altClient.post('/variantes', payloadB, { headers: hdr }).catch(() => null)
+        if (!r3) throw e2
+        return res.json(r3.data)
+      }
+    }
   } catch (e) { return res.status(400).json({ error: e?.response?.data?.error || e?.message || 'Error al crear variante' }) }
 })
 
@@ -36,9 +50,23 @@ router.put('/variantes/:id', async (req, res) => {
     if (!nombre_variante || !valor_variante) return res.status(400).json({ error: 'nombre_variante y valor_variante requeridos' })
     const auth = req.headers.authorization
     const hdr = auth ? { Authorization: auth } : {}
-    const payload = { nombre_variante, valor_variante, precio_adicional: Number(precio_adicional), stock: Number(stock) }
-    const r = await apiClient.put(`/variantes/${id}`, payload, { headers: hdr })
-    return res.json(r.data)
+    // Intento 1: API variantes_productos
+    const payloadA = { atributo: nombre_variante, valor: valor_variante, precio: Number(precio_adicional), stock: Number(stock) }
+    try {
+      const r = await apiClient.put(`/variantes_productos/${id}`, payloadA, { headers: hdr })
+      return res.json(r.data)
+    } catch (e1) {
+      // Intento 2: API variantes
+      const payloadB = { nombre_variante, valor_variante, precio_adicional: Number(precio_adicional), stock: Number(stock) }
+      try {
+        const r2 = await apiClient.put(`/variantes/${id}`, payloadB, { headers: hdr })
+        return res.json(r2.data)
+      } catch (e2) {
+        const r3 = await altClient.put(`/variantes/${id}`, payloadB, { headers: hdr }).catch(() => null)
+        if (!r3) throw e2
+        return res.json(r3.data)
+      }
+    }
   } catch (e) { return res.status(400).json({ error: e?.response?.data?.error || e?.message || 'Error al actualizar variante' }) }
 })
 

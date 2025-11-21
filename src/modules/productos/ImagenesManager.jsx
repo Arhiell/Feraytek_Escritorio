@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { toast } from 'sonner'
 import { imagenesService } from '../../services/imagenesService'
+import { Eye, X } from 'lucide-react'
 
 // Gestión de imágenes (URL y archivos locales) para productos
 export default function ImagenesManager({ imagenes, productoId, onChanged }) {
@@ -10,6 +11,8 @@ export default function ImagenesManager({ imagenes, productoId, onChanged }) {
   const [source, setSource] = useState('url')
   const [dragging, setDragging] = useState(false)
   const fileInputRef = useRef(null)
+  const [preview, setPreview] = useState('')
+  const [confirmDelete, setConfirmDelete] = useState(null)
 
   useEffect(() => { setLocal(imagenes || []) }, [imagenes])
   const handleChange = (e) => setForm(f => ({ ...f, [e.target.name]: e.target.value }))
@@ -20,6 +23,17 @@ export default function ImagenesManager({ imagenes, productoId, onChanged }) {
     const next = [1,2,3].find(p => !taken.has(p)) || 1
     setForm(f => ({ ...f, posicion: String(next) }))
   }, [local])
+
+  useEffect(() => {
+    let url = ''
+    if (source === 'url' && form.url_imagen) url = form.url_imagen
+    if (source === 'file') {
+      const f = form.file || (form.files && form.files[0])
+      if (f) url = URL.createObjectURL(f)
+    }
+    setPreview(url)
+    return () => { if (url && url.startsWith('blob:')) URL.revokeObjectURL(url) }
+  }, [source, form.url_imagen, form.file, form.files])
 
   const onDragOver = (e) => { e.preventDefault(); setDragging(true) }
   const onDragLeave = (e) => { e.preventDefault(); setDragging(false) }
@@ -38,20 +52,20 @@ export default function ImagenesManager({ imagenes, productoId, onChanged }) {
     if (!productoId) { setError('Falta el identificador del producto'); return }
     const pos = Number(form.posicion || '0')
     if (!Number.isFinite(pos) || pos < 1 || pos > 3) { setError('Posición debe ser 1, 2 o 3'); return }
-    if (!form.alt_text.trim()) { setError('Alt text es obligatorio'); return }
+    const alt = form.alt_text && form.alt_text.trim() ? form.alt_text.trim() : (form.file?.name || 'Imagen')
     try {
       if (source === 'file' && (form.files?.length || form.file)) {
         if (form.files && form.files.length > 1) {
-          await imagenesService.crearArchivos(productoId, form.alt_text || (form.file?.name || 'Imagen'), form.files, form.id_variante ? Number(form.id_variante) : undefined)
+          await imagenesService.crearArchivos(productoId, alt, form.files, undefined)
         } else {
-          await imagenesService.crearArchivo(productoId, pos, form.alt_text, form.file, form.id_variante ? Number(form.id_variante) : undefined)
+          await imagenesService.crearArchivo(productoId, pos, alt, form.file, undefined)
         }
       } else {
         if (!form.url_imagen) { setError('Debe ingresar URL válida o seleccionar archivo'); return }
-        await imagenesService.crearUrl({ url_imagen: form.url_imagen, posicion: pos, alt_text: form.alt_text, id_producto: productoId, id_variante: form.id_variante ? Number(form.id_variante) : undefined })
+        await imagenesService.crearUrl({ url_imagen: form.url_imagen, posicion: pos, alt_text: alt, id_producto: productoId })
       }
       toast.success('Imagen agregada')
-      setForm({ url_imagen:'', posicion:'1', alt_text:'', id_variante:'', file:null, files:[] })
+      setForm({ url_imagen:'', posicion:'1', alt_text:'', file:null, files:[] })
       await onChanged()
     } catch (e) { toast.error(e?.message || 'Error al agregar imagen') }
   }
@@ -64,7 +78,7 @@ export default function ImagenesManager({ imagenes, productoId, onChanged }) {
     <div>
       {error && <div className="error-box" style={{marginBottom:8}}>{error}</div>}
       <div className="card" style={{marginBottom:12}}>
-        <div style={{display:'grid', gridTemplateColumns:'repeat(6, 1fr)', gap:8}}>
+        <div style={{display:'flex', flexDirection:'column', gap:8}}>
           <select value={source} onChange={(e)=> setSource(e.target.value)} disabled={local.length>=3}>
             <option value="url">Usar URL</option>
             <option value="file">Subir archivo</option>
@@ -80,28 +94,51 @@ export default function ImagenesManager({ imagenes, productoId, onChanged }) {
               }} style={{display:'none'}} />
             </div>
           )}
-          <input name="posicion" inputMode="numeric" placeholder="Posición" value={form.posicion} onChange={(e)=>numSanitize('posicion', e.target.value)} />
-          <input name="alt_text" placeholder="Alt text" value={form.alt_text} onChange={handleChange} />
-          <input name="id_variante" inputMode="numeric" placeholder="ID variante (opcional)" value={form.id_variante} onChange={(e)=> setForm(f => ({ ...f, id_variante: e.target.value.replace(/[^0-9]/g, '') })) } />
+          <div className="image-form">
+            <input name="posicion" inputMode="numeric" placeholder="Posición" value={form.posicion} onChange={(e)=>numSanitize('posicion', e.target.value)} />
+            <input name="alt_text" placeholder="Alt text" value={form.alt_text} onChange={handleChange} />
+          </div>
           {source==='file' && <button className="btn btn-view" onClick={()=> fileInputRef.current && fileInputRef.current.click()}>Seleccionar archivo(s)</button>}
           <button className="btn btn-orange" onClick={save}>{source==='file' ? (form.files && form.files.length>1 ? 'Guardar archivos' : 'Guardar archivo') : 'Agregar URL'}</button>
         </div>
-        <div style={{marginTop:8, color:'#FF7A00'}}>{local.length}/3 imágenes</div>
+        <div className="image-preview">
+          {preview ? <img src={preview} alt="preview" /> : <div className="info">Sin previsualización</div>}
+          <div className="info">{local.length}/3 imágenes</div>
+        </div>
       </div>
-      <div className="table">
-        <table style={{width:'100%'}}>
-          <thead><tr><th>URL</th><th>Posición</th><th>Alt</th><th>Acciones</th></tr></thead>
-          <tbody>
-            {local.length===0 ? <tr><td colSpan="4" style={{textAlign:'center', padding:20}}>Sin imágenes</td></tr> : local.map(img => (
-              <tr key={img.id ?? img.id_imagen}><td>{img.url_imagen}</td><td>{img.posicion}</td><td>{img.alt_text}</td><td>
-                <div className="actions">
-                  <a href={img.url_imagen} target="_blank" rel="noreferrer" className="btn btn-view">Abrir</a>
-                  <button className="btn btn-delete" onClick={()=>remove(img)}>Eliminar</button>
-                </div>
-              </td></tr>
-            ))}
-          </tbody>
-        </table>
+      <div className="card" style={{marginTop:12}}>
+        <div className="image-slots">
+          {[1,2,3].map(pos => {
+            const img = (local||[]).find(i => Number(i.posicion) === pos)
+            return (
+              <div key={pos} className="image-slot">
+                <div className="badge-pos">Pos {pos}</div>
+                {img ? (
+                  <>
+                    <img src={img.url_imagen} alt={img.alt_text || ''} />
+                    <div className="overlay">
+                      <a href={img.url_imagen} target="_blank" rel="noreferrer" className="icon-btn btn-view" aria-label="Ver" title="Ver"><Eye size={18} /></a>
+                      <button className="icon-btn btn-delete" aria-label="Eliminar" title="Eliminar" onClick={()=> setConfirmDelete(img)}><X size={18} /></button>
+                    </div>
+                  </>
+                ) : <div className="info">Vacío</div>}
+              </div>
+            )
+          })}
+        </div>
+        {/* Se elimina el listado de URLs; acciones disponibles en overlay de cada imagen */}
+        {confirmDelete && (
+          <div className="modal-overlay" onClick={()=> setConfirmDelete(null)}>
+            <div className="modal" onClick={(e)=> e.stopPropagation()}>
+              <h3>Confirmar eliminación</h3>
+              <div style={{marginTop:8, color:'#9ca3af'}}>¿Estás seguro de eliminar esta imagen?</div>
+              <div style={{display:'flex', justifyContent:'flex-end', gap:8, marginTop:12}}>
+                <button className="btn" onClick={()=> setConfirmDelete(null)}>No</button>
+                <button className="btn" onClick={()=> { remove(confirmDelete); setConfirmDelete(null) }} style={{background:'#7f1d1d', color:'#fecaca'}}>Sí</button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   )

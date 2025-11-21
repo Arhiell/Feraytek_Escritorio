@@ -7,13 +7,24 @@ import { variantesService } from './variantesService'
 import { imagenesService } from './imagenesService'
 
 export const productosStats = async () => {
-  const [productos, variantes, imagenes] = await Promise.all([
-    productosService.listar(),
+  let productos = []
+  try { productos = await productosService.listar({ estado: 'todos' }) } catch {}
+  if (!Array.isArray(productos) || productos.length === 0) {
+    try {
+      const activos = await productosService.listar({ estado: 'activo' })
+      const inactivos = await productosService.listar({ estado: 'inactivo' })
+      const map = new Map()
+      ;[...(activos||[]), ...(inactivos||[])].forEach(p => { const id = p?.id || p?.id_producto || p?.producto_id || Math.random(); if (!map.has(id)) map.set(id, p) })
+      productos = Array.from(map.values())
+    } catch {}
+  }
+  const [variantes, imagenes] = await Promise.all([
     variantesService.listar().catch(() => []),
     imagenesService.listar().catch(() => [])
   ])
-  const activos = productos.filter(p => (p.estado ?? p.activo ?? 'activo') === 'activo').length
-  const inactivos = productos.filter(p => (p.estado ?? p.activo ?? 'inactivo') !== 'activo').length
+  const estadoNorm = (p) => String(p.estado ?? (p.activo === true ? 'activo' : 'inactivo')).toLowerCase()
+  const activos = productos.filter(p => estadoNorm(p) === 'activo').length
+  const inactivos = productos.filter(p => estadoNorm(p) !== 'activo').length
   const criticos = productos.filter(p => {
     const stock = p.stock ?? 0
     const min = p.stock_minimo ?? p.stockMinimo ?? 0

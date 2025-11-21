@@ -54,7 +54,7 @@ export default function App() {
   return (
     <Router>
       <div className="App">
-        <Toaster richColors />
+        <Toaster richColors position="top-center" />
         <Routes>
           {/* Ruta de login: delega en módulo */}
           <Route path="/login" element={!user ? <Login onLogin={login} /> : <Navigate to="/" replace />} />
@@ -71,6 +71,7 @@ export default function App() {
                 <Route path="/envios" element={<EnviosPage />} />
                 <Route path="/informes" element={<InformesPage />} />
                 <Route path="/carritos-admin" element={<CarritosAdminPage />} />
+                <Route path="/carrito" element={<CarritosAdminPage />} />
                 <Route path="/soporte" element={<SoportePage />} />
                 <Route path="/resenas" element={<ReseñasPage />} />
                 <Route path="/usuarios" element={<UsuariosPage />} />

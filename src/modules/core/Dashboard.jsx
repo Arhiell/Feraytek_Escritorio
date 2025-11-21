@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useState, useRef } from 'react'
 
 // Dashboard con estadísticas reales y fallback
 export default function Dashboard({ user }) {
@@ -11,6 +11,9 @@ export default function Dashboard({ user }) {
   const [yearMonth, setYearMonth] = useState(() => {
     const d = new Date(); const m = String(d.getMonth() + 1).padStart(2, '0'); return `${d.getFullYear()}-${m}`
   })
+  const [yy, mm] = yearMonth.split('-')
+  const periodText = new Date(parseInt(yy), parseInt(mm)-1, 1).toLocaleDateString('es-ES', { month: 'long', year: 'numeric' })
+  const monthRef = useRef(null)
 
   useEffect(() => {
     const fetchStats = async () => {
@@ -42,6 +45,7 @@ export default function Dashboard({ user }) {
           const arr = extractArray(j2, ['data','facturas','result','results','items'])
           const sum = sumAmounts(arr)
           if (!isNaN(sum)) normalized.ingresos_mes = sum
+          normalized.total_facturas = Array.isArray(arr) ? arr.length : 0
         })())
         if (tasks.length) await Promise.allSettled(tasks)
         setStats(normalized)
@@ -101,20 +105,32 @@ export default function Dashboard({ user }) {
       <h1>Bienvenido, {displayName}!</h1>
       <p>Panel de administración Feraytek</p>
       <div className="card" style={{marginBottom: 16}}>
-        <div style={{display:'flex', gap:12, alignItems:'center'}}>
-          <input type="month" value={yearMonth} onChange={(e)=> setYearMonth(e.target.value)} />
-          <button className="btn" onClick={()=> setYearMonth(yearMonth)}>Actualizar</button>
+        <div className="month-filter">
+          <span className="month-label">Periodo</span>
+          <div className="month-field">
+            <input ref={monthRef} className="month-input" type="month" value={yearMonth} onChange={(e)=> setYearMonth(e.target.value)} />
+            <button type="button" className="month-icon" onClick={()=> monthRef.current && (monthRef.current.showPicker ? monthRef.current.showPicker() : monthRef.current.focus())}>
+              <svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor" aria-hidden="true">
+                <path d="M7 2a1 1 0 0 1 1 1v1h8V3a1 1 0 1 1 2 0v1h1a2 2 0 0 1 2 2v13a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h1V3a1 1 0 1 1 2 0v1zm13 6H4v11h16V8z"/>
+              </svg>
+            </button>
+          </div>
+          <button className="btn btn-primary" onClick={()=> setYearMonth(yearMonth)}>Actualizar</button>
         </div>
+        <div className="legend">Mostrando datos de {periodText}</div>
       </div>
       {loading && <div>Cargando estadísticas...</div>}
       {error && <div className="error-box">{error}</div>}
       <div className="stats-grid">
-        <div className="stat-card"><h3>Total Productos</h3><div className="stat-number">{stats.total_productos ?? 0}</div></div>
-        <div className="stat-card"><h3>Total Facturas</h3><div className="stat-number">{stats.total_facturas ?? 0}</div></div>
-        <div className="stat-card"><h3>Pedidos Pendientes</h3><div className="stat-number">{stats.pedidos_pendientes ?? 0}</div></div>
+        <div className="stat-card"><h3>Facturas del Mes</h3><div className="stat-number">{stats.total_facturas ?? 0}</div></div>
         <div className="stat-card"><h3>Ingresos del Mes</h3><div className="stat-number">{stats.ingresos_mes != null ? `$${stats.ingresos_mes}` : '$0'}</div></div>
-        <div className="stat-card"><h3>Total Usuarios</h3><div className="stat-number">{stats.total_usuarios ?? 0}</div></div>
       </div>
+      <div className="stats-grid">
+        <div className="stat-card"><h3>Total Productos</h3><div className="stat-number">{stats.total_productos ?? 0}</div></div>
+        <div className="stat-card"><h3>Total Usuarios</h3><div className="stat-number">{stats.total_usuarios ?? 0}</div></div>
+        <div className="stat-card"><h3>Pedidos Pendientes (total)</h3><div className="stat-number">{stats.pedidos_pendientes ?? 0}</div></div>
+      </div>
+      <div className="legend">Total acumulado del sistema</div>
     </div>
   )
 }
