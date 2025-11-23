@@ -15,6 +15,14 @@ export default function Dashboard({ user }) {
   const periodText = new Date(parseInt(yy), parseInt(mm)-1, 1).toLocaleDateString('es-ES', { month: 'long', year: 'numeric' })
   const monthRef = useRef(null)
 
+  const parseDateFlexible = (v) => {
+    if (!v) return null
+    const s = typeof v === 'string' ? v.replace(' ', 'T') : String(v)
+    const d = new Date(s)
+    if (!isNaN(d.getTime())) return d
+    return null
+  }
+
   useEffect(() => {
     const fetchStats = async () => {
       setLoading(true); setError('')
@@ -32,19 +40,37 @@ export default function Dashboard({ user }) {
         if (!(normalized.total_facturas > 0)) tasks.push(fetchArr(`${API_BASE}/facturas/admin/todas`).then(a => { normalized.total_facturas = a.length }))
         if (!(normalized.pedidos_pendientes > 0)) tasks.push(fetchArr(`${API_BASE}/pedidos`).then(a => { normalized.pedidos_pendientes = a.length }))
         const [yy, mm] = yearMonth.split('-')
+        const monthIndex = Math.max(0, parseInt(mm, 10) - 1)
+        const mmPadded = String(monthIndex + 1).padStart(2, '0')
         tasks.push((async () => {
-          const r = await fetch(`${API_BASE}/admin/stats/revenue-month?year=${yy}&month=${mm}`, { headers: hdr })
-          let j; try { j = await r.json() } catch { j = {} }
-          const val = j?.ingresos_mes ?? j?.ingresos ?? j?.monto ?? j?.total ?? j?.revenue
-          const num = typeof val === 'string' ? parseFloat(val) : (typeof val === 'number' ? val : null)
-          if (num != null && num > 0) { normalized.ingresos_mes = num; return }
-          const endDate = new Date(parseInt(yy), parseInt(mm), 0).getDate()
-          const start = `${yearMonth}-01`; const end = `${yy}-${mm}-${String(endDate).padStart(2,'0')}`
-          const r2 = await fetch(`${API_BASE}/facturas/admin/buscar?fecha_inicio=${start}&fecha_fin=${end}`, { headers: hdr })
+          const now = new Date(); const cYY = String(now.getFullYear()); const cMM = String(now.getMonth()+1).padStart(2,'0')
+          if (`${yy}-${mmPadded}` === `${cYY}-${cMM}`) {
+            const rs = await fetch(`${API_BASE}/facturas/admin/estadisticas`, { headers: hdr })
+            let js; try { js = await rs.json() } catch { js = {} }
+            const inc = js?.ingresos_mes ?? js?.data?.ingresos_mes ?? js?.total ?? null
+            const cnt = js?.total_facturas ?? js?.data?.total_facturas ?? null
+            if (inc != null) normalized.ingresos_mes = typeof inc === 'string' ? parseFloat(inc) : inc
+            if (cnt != null) normalized.total_facturas = Number(cnt)
+            if (normalized.ingresos_mes > 0 && normalized.total_facturas > 0) return
+          }
+          const endDate = new Date(parseInt(yy, 10), monthIndex + 1, 0).getDate()
+          const start = `${yy}-${mmPadded}-01`; const end = `${yy}-${mmPadded}-${String(endDate).padStart(2,'0')}`
+          const r2 = await fetch(`${API_BASE}/facturas/admin/buscar?fecha_inicio=${start}&fecha_fin=${end}&limite=1000`, { headers: hdr })
           let j2; try { j2 = await r2.json() } catch { j2 = {} }
           const arr = extractArray(j2, ['data','facturas','result','results','items'])
-          const sum = sumAmounts(arr)
-          if (!isNaN(sum)) normalized.ingresos_mes = sum
+          const parseNum = (v) => {
+            if (typeof v === 'number') return v
+            if (typeof v === 'string') { const s = v.replace(/[^0-9,.-]/g, '').replace(',', '.'); const n = parseFloat(s); return isNaN(n) ? 0 : n }
+            return 0
+          }
+          const sum = arr.reduce((acc, item) => {
+            const t = parseNum(item?.total)
+            if (t > 0) return acc + t
+            const st = parseNum(item?.subtotal)
+            const iv = parseNum(item?.iva_total)
+            return acc + (st + iv)
+          }, 0)
+          normalized.ingresos_mes = isNaN(sum) ? 0 : sum
           normalized.total_facturas = Array.isArray(arr) ? arr.length : 0
         })())
         if (tasks.length) await Promise.allSettled(tasks)
@@ -82,13 +108,25 @@ export default function Dashboard({ user }) {
 
   const sumAmounts = (arr) => {
     if (!Array.isArray(arr)) return 0
-    const amountKeys = ['total','monto','importe_total','precio_total','amount','subtotal','valor','precio','importe']
+    const amountKeys = ['total','monto','importe_total','precio_total','amount','subtotal','valor','precio','importe','iva_total']
+    const parseNum = (v) => {
+      if (typeof v === 'number') return v
+      if (typeof v === 'string') {
+        const s = v.replace(/[^0-9,.-]/g, '').replace(',', '.')
+        const n = parseFloat(s)
+        return isNaN(n) ? null : n
+      }
+      return null
+    }
     const readVal = (obj) => {
       for (const k of amountKeys) {
         const v = obj?.[k]
-        if (typeof v === 'number') return v
-        if (typeof v === 'string' && !isNaN(parseFloat(v))) return parseFloat(v)
+        const n = parseNum(v)
+        if (n != null) return n
       }
+      const subN = parseNum(obj?.subtotal)
+      const ivaN = parseNum(obj?.iva_total)
+      if (subN != null && ivaN != null) return subN + ivaN
       if (obj && typeof obj === 'object') {
         for (const key of Object.keys(obj)) {
           const nested = readVal(obj[key])

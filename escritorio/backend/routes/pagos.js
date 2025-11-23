@@ -168,7 +168,66 @@ router.post('/pagos/aprobar', async (req, res) => {
     const auth = req.headers.authorization
     const hdr = auth ? { Authorization: auth } : {}
     const r = await apiClient.post('/pagos/aprobar', req.body, { headers: hdr })
-    return res.json(r.data)
+    const result = { pago_aprobado: true, factura_creada: false, factura_id: null, pdf_generado: false, email_enviado: false, errores: [] }
+    let pid = Number(req.body?.id_pedido)
+    let pagoId = req.body?.id_pago != null ? Number(req.body.id_pago) : null
+    let monto = null
+    // Fallback: intentar derivar datos desde la respuesta de aprobación
+    try {
+      const rd = r.data?.data ?? r.data
+      const rpago = Array.isArray(rd) ? rd[0] : rd
+      if (rpago) {
+        if (!Number.isFinite(pid) || pid <= 0) pid = Number(rpago.id_pedido ?? rpago.pedido_id ?? rpago.order_id)
+        if (!Number.isFinite(pagoId) || pagoId <= 0) pagoId = Number(rpago.id ?? rpago.id_pago)
+        if (!Number.isFinite(monto) || monto <= 0) monto = Number(rpago.monto_total ?? rpago.total ?? rpago.monto)
+      }
+    } catch {}
+    try {
+      if (!Number.isFinite(pid) || pid <= 0) {
+        const rp = await apiClient.get('/pagos', { headers: hdr })
+        let arr = Array.isArray(rp.data?.data) ? rp.data.data : (Array.isArray(rp.data) ? rp.data : (Array.isArray(rp.data?.result) ? rp.data.result : []))
+        if (pagoId != null) {
+          const match = arr.find(p => String(p.id ?? p.id_pago ?? '') === String(pagoId))
+          if (match) {
+            pid = Number(match.id_pedido ?? match.pedido_id ?? match.order_id)
+            monto = Number(match.monto_total ?? match.total ?? match.monto ?? NaN)
+          }
+        } else {
+          const last = arr.filter(p => String(p.estado ?? p.estado_pago ?? '').toLowerCase().includes('apro')).sort((a,b) => new Date(b.created_at ?? 0) - new Date(a.created_at ?? 0))[0]
+          if (last) {
+            pagoId = Number(last.id ?? last.id_pago ?? NaN)
+            pid = Number(last.id_pedido ?? last.pedido_id ?? last.order_id)
+            monto = Number(last.monto_total ?? last.total ?? last.monto ?? NaN)
+          }
+        }
+      }
+    } catch (e) { result.errores.push('no_se_pudo_derivar_pago'); }
+    let pedidoResp = null
+    try { if (Number.isFinite(pid) && pid > 0) pedidoResp = await apiClient.get(`/pedidos/${pid}`, { headers: hdr }) } catch (e) { result.errores.push('pedido_no_encontrado') }
+    const info = pedidoResp ? _clienteInfo(pedidoResp.data) : { id_usuario: null }
+    const uid = info.id_usuario
+    const pd = pedidoResp?.data?.data ?? pedidoResp?.data ?? null
+    let total = Number(monto)
+    if (!Number.isFinite(total) || total <= 0) total = Number(pd?.total ?? pd?.total_final ?? pd?.monto_total ?? NaN)
+    const subtotal = Number(pd?.subtotal ?? NaN)
+    const iva_total = Number(pd?.iva_total ?? NaN)
+    if (Number.isFinite(uid) && Number.isFinite(pid) && Number.isFinite(total) && total > 0) {
+      try {
+        const body = { id_usuario: uid, id_pedido: pid, total, tipo: 'A', subtotal: Number.isFinite(subtotal) ? subtotal : (Number.isFinite(iva_total) ? total - iva_total : total), iva_total: Number.isFinite(iva_total) ? iva_total : 0, id_pago: Number.isFinite(pagoId) ? pagoId : null, pdf_url: null }
+        const cf = await apiClient.post('/facturas/admin', body, { headers: hdr })
+        const fid = cf.data?.data?.id ?? cf.data?.id ?? null
+        if (fid != null) {
+          result.factura_creada = true
+          result.factura_id = fid
+          try { await apiClient.post(`/facturas/admin/${fid}/generar-pdf`, {}, { headers: hdr }); result.pdf_generado = true } catch (e) { result.errores.push('pdf_error') }
+          try { await apiClient.post(`/facturas/admin/${fid}/enviar-email`, {}, { headers: hdr }); result.email_enviado = true } catch (e) { result.errores.push('email_error') }
+          try { await apiClient.patch(`/facturas/admin/${fid}/marcar-enviada`, {}, { headers: hdr }) } catch {}
+        }
+      } catch (e) { result.errores.push('factura_error') }
+    } else {
+      result.errores.push('datos_insuficientes_para_factura')
+    }
+    return res.json({ data: r.data, meta: result })
   } catch (e) { return res.status(400).json({ error: e?.response?.data?.error || e?.message || 'Error al aprobar pago' }) }
 })
 module.exports = router
